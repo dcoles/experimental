@@ -161,9 +161,12 @@ def main():
             with open(slug + '.html', 'w', encoding='utf-8') as f:
                 f.write('---\n')
                 f.write('title: {}\n'.format(json.dumps("G+: " + summarize(post))))
+                f.write('date: "{}"\n'.format(post['creationTime']))
+                f.write('modified_time: "{}"\n'.format(post['updateTime']))
                 if image:
                     f.write('image: {}\n'.format(image))
                 f.write('layout: post\n')
+                f.write('gplus_orig_url: {}\n'.format(post['url']))
                 f.write('---\n\n')
 
                 write_post(f, post)
