@@ -42,6 +42,18 @@ def get_text_content(post):
         return 'Post'
 
 
+def get_image(post):
+    """Try to get an image for the post."""
+    if 'media' in post and post['media']['contentType'].startswith('image/'):
+        return post['media']['url']
+    elif 'link' in post and 'imageUrl' in post['link']:
+        return post['link']['imageUrl']
+    elif 'resharedPost' in post:
+        return get_image(post['resharedPost'])
+    else:
+        return None
+
+
 def parse_datetime(s):
     """Parse datetime from Takeout string."""
     return datetime.datetime.strptime(s, '%Y-%m-%d %H:%M:%S%z')
@@ -144,9 +156,13 @@ def main():
             print(f.name)
             slug = make_slug(post)
 
+            image = get_image(post)
+
             with open(slug + '.html', 'w', encoding='utf-8') as f:
                 f.write('---\n')
                 f.write('title: {}\n'.format(json.dumps("G+: " + summarize(post))))
+                if image:
+                    f.write('image: {}\n'.format(image))
                 f.write('layout: post\n')
                 f.write('---\n\n')
 
