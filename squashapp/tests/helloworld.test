@@ -1,0 +1,62 @@
+# vi: filetype=sh
+
+SHELLS=(/bin/mksh)
+
+function build_helloworld {
+    ../build.sh ../examples/helloworld "$@"
+}
+
+TEST default; DO $(
+    trap 'rm -f *.squashs *.run || true' EXIT
+
+    assert_ok build_helloworld
+    assert_eq "$(./helloworld.run)" "Hello, world!"
+    assert_eq "$(./helloworld.run Bob)" "Hello, Bob!"
+);
+
+TEST custom_main; DO $(
+    trap 'rm -f *.squashs *.run || true' EXIT
+
+    assert_ok build_helloworld bin/helloworld
+    assert_eq "$(./helloworld.run)" "Hello, world!"
+    assert_eq "$(./helloworld.run Joe)" "Hello, Joe!"
+)
+
+TEST absolute_main; DO $(
+    trap 'rm -f *.squashs *.run || true' EXIT
+
+    assert_err build_helloworld /bin/helloworld
+)
+
+TEST external_main; DO $(
+    trap 'rm -f *.squashs *.run || true' EXIT
+
+    assert_err build_helloworld /bin/true
+)
+
+TEST missing_main; DO $(
+    trap 'rm -f *.squashs *.run || true' EXIT
+
+    assert_err build_helloworld bin/nosuchfile
+)
+
+for shell in "${SHELLS[@]}"; do
+    if ! [[ -x "${shell}" ]]; then
+        continue
+    fi
+
+    TEST "$(basename "${shell}")"_shell; DO $(
+        trap 'rm -f *.squashs *.run || true' EXIT
+
+        SQUASHAPP_SHELL="${shell}" assert_ok build_helloworld
+        assert_eq "$(./helloworld.run)" "Hello, world!"
+        assert_eq "$(./helloworld.run Bert)" "Hello, Bert!"
+    )
+done
+
+TEST bad_shell; DO $(
+    trap 'rm -f *.squashs *.run || true' EXIT
+
+    SQUASHAPP_SHELL=/bin/false assert_ok build_helloworld
+    assert_err ./helloworld.run
+)

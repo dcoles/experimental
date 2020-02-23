@@ -4,7 +4,7 @@ A self-extracting SquashFS application builder.
 
 ## Requirements
 
-- [`bash`](https://www.gnu.org/software/bash) or compatible shell
+- [`bash`](https://www.gnu.org/software/bash) (or compatible [`mksh`, `busybox`, ...])
 - [`mksquashfs`](https://github.com/plougher/squashfs-tools)
 - [`squashfuse`](https://github.com/vasi/squashfuse)
 

@@ -4,7 +4,7 @@ set -e
 
 THIS="$0"
 NAME="$(basename "${THIS}" .run)"
-LINES="$(grep -aUFonx '# EOF' "${THIS}" | cut -d : -f 1)"
+LINES="$(grep -aFonx '# EOF' "${THIS}" | cut -d : -f 1)"
 OFFSET="$(head -n "${LINES}" < "${0}" | wc -c)"
 MAIN="${MAIN:?}"
 SIZE="${SIZE:?}"
@@ -19,7 +19,7 @@ function _digest {
 }
 
 function _mount {
-    MOUNT="$(mktemp -d --tmpdir squashapp.XXXXXXXXXX)"
+    MOUNT="$(mktemp -d -t squashapp.XXXXXXXXXX)"
     squashfuse -o offset="${OFFSET:-0}" -- "${THIS}" "${MOUNT}"
 }
 

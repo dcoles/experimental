@@ -11,7 +11,7 @@ BASEDIR="$(dirname "$0")"
 DIR="$1"
 NAME="$(basename "${DIR}")"
 MAIN="${2:-bin/${NAME}}"
-INTERPRETER=/bin/bash
+SQUASHAPP_SHELL=${SQUASHAPP_SHELL:-/bin/bash}
 LOADER="${BASEDIR}/lib/loader.sh"
 SQUASH="${NAME}.squash"
 OUT="${NAME}.run"
@@ -34,7 +34,7 @@ SIZE="$(wc -c < "${SQUASH}")"
 SHA256="$(sha256sum -b "${SQUASH}" | cut -d ' ' -f 1)"
 
 echo >&2 "Building ${OUT}"
-sed -e "s|^#!.*|#!${INTERPRETER}|" \
+sed -e "s|^#!.*|#!${SQUASHAPP_SHELL}|" \
     -e "s|^SIZE=.*|SIZE=\"${SIZE}\"|" \
     -e "s|^SHA256=.*|SHA256=\"${SHA256}\"|" \
     -e "s|^MAIN=.*|MAIN=\"${MAIN}\"|" \
