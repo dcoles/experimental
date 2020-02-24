@@ -1,7 +1,7 @@
 #!/bin/bash
-set -e
+set -e -u
 
-cd "$(dirname "$0")"
+cd "$(dirname "${BASH_SOURCE[0]}")"
 
 source lib.sh
 
@@ -10,7 +10,8 @@ for TESTFILE in *.test; do
     . "${TESTFILE}"
 done
 
-log '\n%d tests failed' "${#FAILED[@]}"
+log
+log "${#FAILED[@]} tests failed"
 for failed in "${FAILED[@]}"; do
-    log '- %s' "${failed}"
+    log "- ${failed}"
 done
