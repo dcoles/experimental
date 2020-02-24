@@ -1,55 +1,119 @@
 #!/bin/bash
 # Build SquashFS app
-set -e
+set -e -u
 
-BASEDIR="$(dirname "$0")"
+BASEDIR="$(dirname "${BASH_SOURCE[0]}")"
+RED="$(tput setaf 1)"
+GREEN="$(tput setaf 2)"
+RESET="$(tput sgr0)"
+
+function usage {
+    log "Usage: $0 [options] <sourcedir> [<main>]"
+}
+
+function log {
+    echo >&2 "$*"
+}
+
+function status {
+    echo >&2 "${GREEN}$*${RESET}"
+}
+
+function error {
+    echo >&2 "${RED}ERROR: $*${RESET}"
+}
+
+# Flags
+FLAG_EMBED=
+
+for arg in "$@"; do
+    case "${arg}" in
+        --)
+            shift
+            break
+            ;;
+        --embed)
+            FLAG_EMBED=1
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -*)
+            error "Unknown flag $1"
+            usage
+            exit
+            ;;
+        *)
+            continue
+            ;;
+    esac
+    shift
+done
 
 if [[ $# -lt 1 || $# -gt 2 ]]; then
-    echo >&2 "Usage: $0 <sourcedir> [<main>]"
+    usage
     exit 2
 fi
 
 SOURCE="$1"
-SQUASHAPP_NAME="$(basename "${SOURCE}")"
+SQUASHAPP_NAME="$(basename -- "${SOURCE}")"
 SQUASHAPP_MAIN="${2:-bin/${SQUASHAPP_NAME}}"
 SQUASHAPP_SHELL=${SQUASHAPP_SHELL:-/bin/bash}
 SQUASHAPP="${SQUASHAPP_NAME}.run"
 
+# Sanity checking
 if ! [[ -d "${SOURCE}" ]]; then
-    echo >&2 "ERROR: ${SOURCE} is not a directory"
+    error "${SOURCE} is not a directory"
     exit 1
 fi
 
 if ! [[ -x "${SQUASHAPP_SHELL}" ]]; then
-    echo >&2 "ERROR: ${SQUASHAPP_SHELL} is not a valid executable"
+    error "${SQUASHAPP_SHELL} is not a valid executable"
     exit 1
 fi
 
 if ! (cd "${SOURCE}" && [[ -n "$(find . -wholename ./"${SQUASHAPP_MAIN}" -executable)" ]]); then
-    echo >&2 "ERROR: Could not find executable ${SQUASHAPP_MAIN} in ${1}"
-    echo >&2 "Note: <main> must be relative to <dir> (e.g. \"bin/${SQUASHAPP_NAME}\")"
+    error "Could not find executable ${SQUASHAPP_MAIN} in ${1}"
+    log "Note: <main> must be relative to <dir> (e.g. \"bin/${SQUASHAPP_NAME}\")"
     exit 1
 fi
 
 # Build SquashFS
 SQUASHFS="${SQUASHAPP_NAME}.squash"
 
-echo >&2 "Building ${SQUASHFS}"
+status "Building ${SQUASHFS}..."
 mksquashfs "${SOURCE}" "${SQUASHFS}" -noappend -all-root -comp xz
 
 # Build SquashApp
 SQUASHAPP_FSSIZE="$(wc -c < "${SQUASHFS}")"
 SQUASHAPP_SHA256="$(sha256sum -b "${SQUASHFS}" | cut -d ' ' -f 1)"
 
-echo >&2 "Building ${SQUASHAPP}"
-sed -e "s|^#!.*|#!${SQUASHAPP_SHELL}|" \
-    -e "s|^SQUASHAPP_NAME=.*|SQUASHAPP_NAME=\"${SQUASHAPP_NAME}\"|" \
-    -e "s|^SQUASHAPP_MAIN=.*|SQUASHAPP_MAIN=\"${SQUASHAPP_MAIN}\"|" \
-    -e "s|^SQUASHAPP_FSSIZE=.*|SQUASHAPP_FSSIZE=\"${SQUASHAPP_FSSIZE}\"|" \
-    -e "s|^SQUASHAPP_SHA256=.*|SQUASHAPP_SHA256=\"${SQUASHAPP_SHA256}\"|" \
-    "${BASEDIR}"/lib/stub.sh | cat - "${BASEDIR}"/lib/squashapp.sh "${SQUASHFS}" > "${SQUASHAPP}"
+status "Building ${SQUASHAPP}..."
+FRAGMENTS=()
+if [[ -n "${FLAG_EMBED}" ]]; then
+    log 'Embedding runtime'
+    INTERPRETER="${SQUASHAPP_SHELL}"
+    FRAGMENTS+=( "${BASEDIR}"/lib/runtime.sh )
+else
+    INTERPRETER='/usr/bin/env squashapp_helper'
+    FRAGMENTS+=( "${BASEDIR}"/lib/stub-runtime.sh )
+fi
+FOOTER=$'\nexit 99\n# EOF'
+
+{ cat - "${FRAGMENTS[@]}" <<EOF ; echo "${FOOTER}"; cat "${SQUASHFS}"; } > "${SQUASHAPP}"
+#!${INTERPRETER}
+# SquashFS app self-extractor
+set -e -u
+
+SQUASHAPP_NAME='${SQUASHAPP_NAME}'
+SQUASHAPP_MAIN='${SQUASHAPP_MAIN}'
+SQUASHAPP_FSSIZE=${SQUASHAPP_FSSIZE}
+SQUASHAPP_SHA256='${SQUASHAPP_SHA256}'
+EOF
 
 rm "${SQUASHFS}"
 chmod a+x "${SQUASHAPP}"
 
-echo >&2 'Done'
+du --apparent-size -h "${SQUASHAPP}"
+log 'Done'

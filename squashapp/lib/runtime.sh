@@ -1,12 +1,24 @@
 
-# SquashApp runtime
+SQUASHAPP="$0"
+SQUASHAPP_RUNTIME_VER=0.1
 
-# Required variables
-: "${SQUASHAPP:?}"
-: "${SQUASHAPP_NAME:?}" 
-: "${SQUASHAPP_MAIN:?}"
-: "${SQUASHAPP_FSSIZE:?}"
-: "${SQUASHAPP_SHA256:?}"
+function usage {
+    log "Usage: $0 [options] ..."
+    log "SquashApp options:"
+    log "	--squashapp-extract   extract SquashFS as ${SQUASHAPP_NAME}.squash"
+    log "	--squashapp-mount     mount SquashFS volume and print mountpoint"
+    log "	--squashapp-offset    print offset of SquashFS data"
+    log "	--squashapp-verify    check digest of SquashFS data matches"
+    log "	--squashapp-help      show help (this text)"
+}
+
+function log {
+    echo >&2 "$*"
+}
+
+function error {
+    echo >&2 "ERROR: $*"
+}
 
 # Calculate number of lines of runtime
 # Requires file to end with a '# EOF' line
@@ -16,7 +28,7 @@ function squashapp_lines {
     lines="$(grep -aFonx '# EOF' "${SQUASHAPP}" | cut -d : -f 1)"
 
     if ! [[ "${lines}" -gt 0 ]]; then
-        echo >&2 'ERROR: Could not calculate SquashFS offset'
+        error 'Could not calculate SquashFS offset'
         exit 1
     fi
 
@@ -57,12 +69,12 @@ function squashapp_mount {
     mountpoint="$(mktemp -d -t squashapp.XXXXXXXXXX)"
 
     if ! [[ -d "${mountpoint}" ]]; then
-        echo >&2 "ERROR: Failed to create mountpoint"
+        error "Failed to create mountpoint"
         exit 1
     fi
 
     if ! squashfuse -o offset="${offset}" -- "${SQUASHAPP}" "${mountpoint}"; then
-        echo >&2 "ERROR: Failed to mount ${SQUASHAPP} (offset: ${offset})"
+        error "Failed to mount ${SQUASHAPP} (offset: ${offset})"
         rmdir "${mountpoint}"
         exit 1
     fi
@@ -97,22 +109,22 @@ function main {
     offset="$(squashapp_offset)"
 
     if [[ "$(wc -c < "${SQUASHAPP}")" -lt "$(( offset + SQUASHAPP_FSSIZE ))" ]]; then
-        echo >&2 'ERROR: Truncated archive'
+        error 'Truncated archive'
         exit 1
     fi
 
     # Local args
     for arg in "$@"; do
         case "${arg}" in
-            --squashapp-uncat)
-                echo >&2 "Extracting to ${NAME}.squash"
-                squashapp_extract "$0" "${NAME}.squash" "${offset}"
+            --squashapp-extract)
+                log "Extracting to ${SQUASHAPP_NAME}.squash"
+                squashapp_extract "${SQUASHAPP_NAME}.squash" "${offset}"
                 exit 0
                 ;;
             --squashapp-mount)
                 local mountpoint
-                mountpoint="$(squashapp_mount)"
-                echo >&2 "Mounted to ${mountpoint}"
+                mountpoint="$(squashapp_mount "${offset}")"
+                log "Mounted to ${mountpoint}"
                 exit 0
                 ;;
             --squashapp-offset)
@@ -123,14 +135,19 @@ function main {
                 local digest
                 digest="$(squashapp_sha256_digest)"
                 if [[ "${digest}" != "${SQUASHAPP_SHA256}" ]]; then
-                    echo >&2 "Bad sha256sum: ${digest}"
+                    log "Bad sha256sum: ${digest}"
                     exit 1
                 fi
-                echo >&2 "OK ${digest}"
+                log "OK ${digest}"
+                exit 0
+                ;;
+            --squashapp-help)
+                usage
                 exit 0
                 ;;
             --squashapp*)
-                echo >&1 "ERROR: Unknown SquashApp flag ${arg}"
+                error "Unknown SquashApp flag ${arg}"
+                usage
                 exit 2
                 ;;
             *)
@@ -146,6 +163,4 @@ function main {
 }
 
 main "$@"
-
-exit "$?"
-# EOF
+exit $?

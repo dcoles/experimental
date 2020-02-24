@@ -1,7 +1,7 @@
 # vi: filetype=sh
 
 function build_helloworld {
-    build_squashapp ../examples/helloworld "$@"
+    build_squashapp --embed ../examples/helloworld "$@"
 }
 
 for shell in shells/*; do
