@@ -1,8 +1,5 @@
-#!/bin/bash
-set -e
+# Required for tests
 shopt -s expand_aliases
-
-cd "$(dirname "$0")"
 
 RED="$(tput setaf 1)"
 GREEN="$(tput setaf 2)"
@@ -13,7 +10,9 @@ function log {
 }
 
 function TEST {
-    log '- %s' "$1"
+    TESTNAME="$1"
+
+    log '- %s' "${TESTNAME}"
 }
 
 function DO {
@@ -23,8 +22,14 @@ function DO {
         log "  ${GREEN}pass${RESET}"
     else
         log "  ${RED}FAIL${RESET}"
+        FAILED+=("${TESTFILE}:${TESTNAME}")
     fi
 
+    unset TESTNAME
+}
+
+function build_squashapp {
+    ../build_squashapp "$@"
 }
 
 function _assert_eq {
@@ -72,7 +77,3 @@ function _fail {
 
 alias fail='_fail "${LINENO}"'
 
-for test in *.test; do
-    echo >&2 "Running ${test}..."
-    ( . "${test}" )
-done
