@@ -12,13 +12,13 @@ A self-extracting SquashFS application builder.
 ## Building a SquashApp
 
 ```bash
-build.sh <dir> [<main>]
+build_squashapp [options] <sourcedir> [<main>]
 ```
 
 For example:
 
 ```bash
-./build.sh examples/helloworld bin/helloworld
+build_squashapp examples/helloworld/ bin/helloworld
 ```
 
 
