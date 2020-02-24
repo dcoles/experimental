@@ -57,10 +57,10 @@ if [[ $# -lt 1 || $# -gt 2 ]]; then
 fi
 
 SOURCE="$1"
-SQUASHAPP_NAME="$(basename -- "${SOURCE}")"
-SQUASHAPP_MAIN="${2:-bin/${SQUASHAPP_NAME}}"
+NAME="$(basename -- "${SOURCE}")"
+SQUASHAPP_MAIN="${2:-bin/${NAME}}"
 SQUASHAPP_SHELL=${SQUASHAPP_SHELL:-/bin/bash}
-SQUASHAPP="${SQUASHAPP_NAME}.run"
+SQUASHAPP="${NAME}.run"
 
 # Sanity checking
 if ! [[ -d "${SOURCE}" ]]; then
@@ -75,12 +75,12 @@ fi
 
 if ! (cd "${SOURCE}" && [[ -n "$(find . -wholename ./"${SQUASHAPP_MAIN}" -executable)" ]]); then
     error "Could not find executable ${SQUASHAPP_MAIN} in ${1}"
-    log "Note: <main> must be relative to <dir> (e.g. \"bin/${SQUASHAPP_NAME}\")"
+    log "Note: <main> must be relative to <dir> (e.g. \"bin/${NAME}\")"
     exit 1
 fi
 
 # Build SquashFS
-SQUASHFS="${SQUASHAPP_NAME}.squash"
+SQUASHFS="${NAME}.squash"
 
 status "Building ${SQUASHFS}..."
 mksquashfs "${SOURCE}" "${SQUASHFS}" -noappend -all-root -comp xz
@@ -106,7 +106,6 @@ FOOTER=$'\nexit 99\n# EOF'
 # SquashFS app self-extractor
 set -e -u
 
-SQUASHAPP_NAME='${SQUASHAPP_NAME}'
 SQUASHAPP_MAIN='${SQUASHAPP_MAIN}'
 SQUASHAPP_FSSIZE=${SQUASHAPP_FSSIZE}
 SQUASHAPP_SHA256='${SQUASHAPP_SHA256}'

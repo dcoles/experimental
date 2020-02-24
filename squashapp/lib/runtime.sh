@@ -1,5 +1,7 @@
 
 SQUASHAPP="$0"
+SQUASHAPP_NAME="$(basename "$0" .run)"
+SQUASHAPP_ARGV0="$(dirname "$0")/${SQUASHAPP_NAME}"
 SQUASHAPP_RUNTIME_VER=0.1
 
 function usage {
@@ -92,13 +94,13 @@ function squashapp_unmount {
 }
 
 # Run command
-# Usage: run <cwd> <program> <arg>...
-function run {
+# Usage: run <mountpoint> <arg>...
+function run_main {
     (
-        local cwd="${1:?}"
+        local mountpoint="${1:?}"
         shift
 
-        cd "${cwd}" && exec "$@"
+        exec -a "${SQUASHAPP_ARGV0}" "${mountpoint}/${SQUASHAPP_MAIN}" "$@"
     )
 }
 
@@ -159,7 +161,7 @@ function main {
     MOUNTPOINT="$(squashapp_mount "${offset}")"
     trap 'squashapp_unmount "${MOUNTPOINT}"' EXIT
 
-    run "${MOUNTPOINT}" ./"${SQUASHAPP_MAIN}" "$@"
+    run_main "${MOUNTPOINT}" "$@"
 }
 
 main "$@"
