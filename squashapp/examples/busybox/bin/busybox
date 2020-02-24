@@ -1,0 +1,13 @@
+#!/bin/bash
+
+BUSYBOX=/bin/busybox
+
+echo >&2 "NOTE: SquashApp is using system BusyBox." \
+    "Consider replacing this file ('bin/busybox') with the actual binary."
+
+if ! [[ -e "${BUSYBOX}" ]]; then
+    echo >&2 "ERROR: \"${BUSYBOX}\" was not found"
+    exit 1
+fi
+
+exec -a "$0" ${BUSYBOX} "$@"
