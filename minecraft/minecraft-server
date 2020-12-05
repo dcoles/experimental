@@ -1,0 +1,41 @@
+#!/bin/bash
+# Fetch and start Minecraft server
+set -e
+
+SERVER_JAR=server.jar
+EULA=eula.txt
+EULA_TIMEOUT=10
+VERSIONS_URL='https://launchermeta.mojang.com/mc/game/version_manifest.json'
+
+while getopts 'uh' opt; do
+    case "${opt}" in
+    u)
+        UPDATE=1
+        ;;
+    *)
+        echo 2>&1 "USAGE: $0 [-u]"
+        exit 0
+        ;;
+    esac
+done
+
+# Get latest version
+if [[ ! -e "${SERVER_JAR}" || "${UPDATE}" ]]; then
+    echo 2>&1 'Fetching latest release'
+    PACKAGE_URL="$(curl -sSfL -- "${VERSIONS_URL}" | jq --raw-output '[.versions[]|select(.type == "release")][0].url')"
+    SERVER_URL="$(curl -sSfL -- "${PACKAGE_URL}" | jq --raw-output .downloads.server.url)"
+    curl -sSfL -z "${SERVER_JAR}" -o "${SERVER_JAR}" -- "${SERVER_URL}"
+fi
+
+# Check EULA
+if ! grep -s '^eula=true$' "${EULA}" > /dev/null; then
+    echo 2>&1 'By running this server you agree to the Minecraft EULA'
+    echo 2>&1 "Press ^C in the next ${EULA_TIMEOUT} seconds to cancel"
+
+    sleep "${EULA_TIMEOUT}"
+    echo eula=true > "${EULA}"
+fi
+
+# Run server
+echo 2>&1 'Starting server'
+exec java -Xms1024M -Xmx1536M -jar server.jar nogui

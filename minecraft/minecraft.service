@@ -1,0 +1,17 @@
+# Copyright 2018 David Coles <coles.david@gmail.com>
+# This project is licensed under the terms of the MIT license. See LICENSE.txt
+[Unit]
+Description=Minecraft server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+DynamicUser=yes
+StateDirectory=minecraft
+WorkingDirectory=/var/lib/minecraft
+ExecStart=minecraft-server -u
+ProtectSystem=strict
+ProtectHome=tmpfs
+
+[Install]
+WantedBy=multi-user.target
