@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hello, WASM!</title>
+    <script type="module">
+        import init from './pkg/wasm.js';
+        import { greet_async } from "./pkg/wasm.js";
+
+        init().then(() => {
+            greet_async('David').then(() => {
+                console.log('done')
+            });
+        })
+    </script>
+</head>
+<body>
+</body>
+</html>
