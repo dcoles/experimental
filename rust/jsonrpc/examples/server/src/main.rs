@@ -15,6 +15,6 @@ async fn main() -> jsonrpc::Result<()> {
     Ok(())
 }
 
-fn hello(_: Option<&jsonrpc::Params>) -> Option<Value> {
-    Some(json!("Hello, world!"))
+fn hello(_: Option<&jsonrpc::Params>) -> Result<Option<Value>, jsonrpc::message::Error> {
+    Ok(Some(json!("Hello, world!")))
 }

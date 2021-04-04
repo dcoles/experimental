@@ -7,7 +7,7 @@ use log::{debug, info, warn};
 use crate::channel::Channel;
 use crate::message::{Error, Message, Params, VERSION};
 
-pub type Handler = dyn Fn(Option<&Params>) -> Option<Value>;
+pub type Handler = dyn Fn(Option<&Params>) -> Result<Option<Value>, Error>;
 
 pub struct Server {
     listener: TcpListener,
@@ -50,8 +50,10 @@ impl Server {
             let request_id = request.id.unwrap();
 
             let response = if let Some(handler) = self.handlers.get_mut(&request.method) {
-                let result = handler(request.params.as_ref());
-                Message::make_response(result, request_id)
+                match handler(request.params.as_ref()) {
+                    Err(err) => Message::make_error_response(err, request_id),
+                    Ok(result) => Message::make_response(result, request_id),
+                }
             } else {
                 warn!("Method not found: {}", request.method);
                 Message::make_error_response(Error::method_not_found(), request_id)
