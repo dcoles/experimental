@@ -69,11 +69,20 @@ pub struct Request {
     pub id: Option<Value>
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(untagged)]
 pub enum Params {
     ByPosition(Vec<Value>),
     ByName(Map<String, Value>)
+}
+
+impl Into<Value> for Params {
+    fn into(self) -> Value {
+        match self {
+            Params::ByPosition(array) => Value::Array(array),
+            Params::ByName(map) => Value::Object(map),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug)]

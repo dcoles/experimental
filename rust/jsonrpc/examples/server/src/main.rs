@@ -8,6 +8,7 @@ async fn main() -> jsonrpc::Result<()> {
 
     let mut handlers: HashMap<_, Box<jsonrpc::Handler>> = HashMap::new();
     handlers.insert("hello".to_string(), Box::new(hello));
+    handlers.insert("echo".to_string(), Box::new(echo));
 
     let mut server = jsonrpc::server::listen("127.0.0.1:5000", handlers).await?;
     server.run().await?;
@@ -17,4 +18,8 @@ async fn main() -> jsonrpc::Result<()> {
 
 fn hello(_: Option<&jsonrpc::Params>) -> Result<Option<Value>, jsonrpc::message::Error> {
     Ok(Some(json!("Hello, world!")))
+}
+
+fn echo(params: Option<&jsonrpc::Params>) -> Result<Option<Value>, jsonrpc::message::Error> {
+    Ok(params.map(|p| p.clone().into()))
 }
