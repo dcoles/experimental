@@ -48,7 +48,7 @@ fn handle_stream(mut stream: TcpStream, fortunes: &[String]) {
     let mut rng = rand::thread_rng();
     let picked_fortune = fortunes.choose(&mut rng).expect("No fortunes available");
 
-    writeln!(stream, "{}", picked_fortune).expect("Write failed");
+    writeln!(stream, "HTTP/1.0 200 OK\r\n\r\n{}", picked_fortune).expect("Write failed");
 }
 
 #[cfg(test)]
@@ -83,6 +83,6 @@ mod test {
         let mut buf = String::new();
         client.read_to_string(&mut buf).expect("Read failed");
 
-        assert_eq!(buf, "Reply hazy, try again.\n");
+        assert_eq!(buf, "HTTP/1.0 200 OK\r\n\r\nReply hazy, try again.\n");
     }
 }
