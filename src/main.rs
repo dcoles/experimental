@@ -2,12 +2,17 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use rand::seq::SliceRandom;
+
 const FORTUNES: &str = "fortunes";
 
 fn main() {
     let fortunes = fortunes_from_file(FORTUNES).expect("Failed to read fortunes");
 
-    println!("{}", fortunes[0]);
+    let mut rng = rand::thread_rng();
+    let picked_fortune = fortunes.choose(&mut rng).expect("No fortunes available");
+
+    println!("{}", picked_fortune);
 }
 
 /// Read fortunes from a fortunes text file.
