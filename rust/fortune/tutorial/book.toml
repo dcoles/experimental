@@ -1,0 +1,6 @@
+[book]
+authors = ["David Coles"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Tutorial: Fortune"
