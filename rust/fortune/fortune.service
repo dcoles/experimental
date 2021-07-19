@@ -1,0 +1,12 @@
+# Copyright 2018 David Coles <coles.david@gmail.com>
+# This project is licensed under the terms of the MIT license. See LICENSE.txt
+[Unit]
+Description=Fortune server
+
+[Service]
+DynamicUser=yes
+ExecStart=/usr/local/bin/fortune-server
+WorkingDirectory=/usr/local/share/games/fortunes
+
+[Install]
+WantedBy=multi-user.target
