@@ -85,7 +85,7 @@ mod test {
                 "                -- Anonymous"
             )
         );
-        assert_eq!(fortunes[98], "All rights reserved.");
+        assert_eq!(fortunes[97], "All rights reserved.");
     }
 
     #[test]
