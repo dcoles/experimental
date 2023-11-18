@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Blender Tile Render</title>
+  <script>
+    // Configuration
+    const WIDTH = 512;
+    const HEIGHT = 512;
+    const SCENE = "blender-3.5-splash.blend";
+    const COLS = 4; // 4x4 = 16 tiles
+    const CYCLES_DEVICE = 'CPU'; // may be 'CPU', 'CUDA', 'HIP', 'ONEAPI', ...
+  </script>
+</head>
+<body>
+  <h1>Blender Tile Render</h1>
+  <canvas id="render" style="border: solid 1px black;"></canvas>
+  <div id="console"></div>
+  <script>
+    window.addEventListener("load", () => {
+      const TILE_WIDTH = WIDTH / COLS;
+      const TILE_HEIGHT = HEIGHT / COLS;
+
+      const render = document.getElementById("render");
+      render.width = WIDTH;
+      render.height = HEIGHT;
+
+      const console = document.getElementById("console");
+      console.innerText = `Rendering \`${SCENE}\` (${WIDTH}⨯${HEIGHT} px) using ${TILE_WIDTH}⨯${TILE_HEIGHT} px tiles`;
+
+      const ctx = render.getContext("2d");
+
+      const startTime = Date.now();
+
+      let remainingTiles = COLS * COLS;
+      function finishedTile() {
+        remainingTiles--;
+
+        if (remainingTiles == 0) {
+          const renderingTime = Date.now() - startTime;
+          console.innerHTML += ` [Rendering time: ${Math.round(renderingTime / 100) / 10} secs]`
+        }
+      }
+
+      for (let i = 0; i < COLS; i++) {
+        for (let j = 0; j < COLS; j++) {
+          const n = i * COLS + j;
+
+          // Start loading the image
+          const img = new Image();
+          img.src = `render/${encodeURIComponent(SCENE)}?resolutionX=${WIDTH}&resolutionY=${HEIGHT}&cols=${COLS}&n=${n}&cyclesDevice=${CYCLES_DEVICE}`;
+
+          const x = j * TILE_WIDTH;
+          const y = i * TILE_HEIGHT;
+          ctx.fillStyle = 'cornflowerblue';
+          ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
+
+          img.addEventListener("load", (ev) => {
+            ctx.drawImage(ev.target, x, y, TILE_WIDTH, TILE_HEIGHT);
+            finishedTile();
+          });
+
+          img.addEventListener("error", (ev) => {
+            ctx.fillStyle = 'red';
+            ctx.fillRect(x, y, TILE_WIDTH, TILE_HEIGHT);
+            finishedTile();
+          });
+        }
+      }
+    });
+  </script>
+</body>
+</html>
