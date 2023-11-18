@@ -1,5 +1,7 @@
 # Blender Tile Render
 
+![image](https://github.com/dcoles/experimental/assets/1007415/4f076b16-0360-4349-b98e-5c6924ec7108)
+
 A simple tile-based renderer for Blender scenes.
 
 Not production quality (see [Limitations](#limitations)).
