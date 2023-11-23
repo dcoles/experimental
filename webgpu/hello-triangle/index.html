@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebGPU example</title>
+  <link id="vertShader" rel="preload" type="text/wgsl" href="./shaders/triangle.vert.wgsl" as="fetch" crossorigin="anonymous">
+  <link id="fragShader" rel="preload" type="text/wgsl" href="./shaders/triangle.frag.wgsl" as="fetch" crossorigin="anonymous">
+</head>
+<body>
+  <h1>WebGPU example</h1>
+  <canvas id="canvas" width="512" height="512" style="border: solid 1px black;">Canvas not supported</canvas>
+  <script type="module">
+    const entry = window.navigator.gpu;
+    if (!entry) {
+      throw new Error('WebGPU not supported');
+    }
+
+    const canvas = document.getElementById('canvas');
+    const context = canvas.getContext('webgpu');
+
+    // A triangle
+    const positions = new Float32Array([
+      1.0, -1.0, 0.0,
+      -1.0, -1.0, 0.0,
+      0.0, 1.0, 0.0
+    ]);
+
+    // Vertex colors
+    const colors = new Float32Array([
+      1.0, 0.0, 0.0, // R
+      0.0, 1.0, 0.0, // G
+      0.0, 0.0, 1.0, // B
+    ]);
+
+    // Draw indices for vertex ordering
+    const indices = new Uint16Array([0, 1, 2]);
+
+    // Extra data for vertex shader
+    const uniformData = new Float32Array([
+      // modelViewProj: mat4x4<f32> (identity matrix)
+      1.0, 0.0, 0.0, 0.0,
+      0.0, 1.0, 0.0, 0.0,
+      0.0, 0.0, 1.0, 0.0,
+      0.0, 0.0, 0.0, 1.0,
+
+      // primaryColor: vec4<f32>
+      0.9, 0.1, 0.3, 1.0,
+
+      // accentColor: vec4<f32>
+      0.8, 0.2, 0.8, 1.0,
+    ]);
+
+    let adapter = null;
+    let device = null;
+    let queue = null;
+
+    let depthTexture = null;
+    let depthTextureView = null;
+
+    let positionBuffer = null;
+    let colorBuffer = null;
+    let indexBuffer = null;
+
+    let uniformBuffer = null;
+    let uniformBindGroup = null;
+
+    let pipeline = null;
+
+    /**
+     * Main function
+     */
+    async function main() {
+      adapter = await entry.requestAdapter();
+      device = await adapter.requestDevice();
+      queue = device.queue;
+
+      // Helper for creating GPU buffers
+      function createBuffer(arr, usage) {
+        const buffer = device.createBuffer({
+          size: (arr.byteLength + 3) & ~3,
+          usage,
+          mappedAtCreation: true,
+        });
+
+        const writeArray = arr instanceof Uint16Array ? new Uint16Array(buffer.getMappedRange()) : new Float32Array(buffer.getMappedRange());
+        writeArray.set(arr);
+        buffer.unmap();
+
+        return buffer;
+      }
+
+      // Helper for loading shaders
+      async function loadShader(id) {
+        const preload = document.getElementById(id);
+        if (preload.type !== "text/wgsl") {
+          throw new Error(`${id}: incorrect type "${preload.type}" (expected "text/wgsl")`);
+        }
+
+        const result = await fetch(preload.href);
+        const shaderCode = await result.text();
+
+        return device.createShaderModule({ code: shaderCode });
+      }
+
+      context.configure({
+        device: device,
+        format: 'bgra8unorm',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+        alphaMode: 'opaque',
+      });
+
+      depthTexture = device.createTexture({
+        size: [canvas.width, canvas.height, 1],
+        dimension: '2d',
+        format: 'depth24plus-stencil8',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      depthTextureView = depthTexture.createView();
+
+      positionBuffer = createBuffer(positions, GPUBufferUsage.VERTEX);
+      colorBuffer = createBuffer(colors, GPUBufferUsage.VERTEX);
+      indexBuffer = createBuffer(indices, GPUBufferUsage.INDEX);
+
+      const vertModule = await loadShader('vertShader');
+      const fragModule = await loadShader('fragShader');
+
+      pipeline = device.createRenderPipeline({
+        layout: "auto",
+        vertex: {
+          module: vertModule,
+          entryPoint: 'main',
+          buffers: [
+            // position
+            {
+              attributes: [
+                {
+                  shaderLocation: 0, // @location(0)
+                  offset: 0,
+                  format: 'float32x3',
+                }
+              ],
+              arrayStride: 4 * 3, // sizeof(float) * 3
+              stepMode: 'vertex',
+            },
+            // color
+            {
+              attributes: [
+                {
+                  shaderLocation: 1, // @location(1)
+                  offset: 0,
+                  format: 'float32x3',
+                }
+              ],
+              arrayStride: 4 * 3, // sizeof(float) * 3
+              stepMode: 'vertex',
+            },
+          ],
+        },
+        fragment: {
+          module: fragModule,
+          entryPoint: 'main',
+          targets: [
+            { format: 'bgra8unorm' },
+          ],
+        },
+        primitive: {
+          frontFace: 'cw',
+          cullMode: 'none',
+          topology: 'triangle-list',
+        },
+        depthStencil: {
+          depthWriteEnabled: true,
+          depthCompare: 'less',
+          format: 'depth24plus-stencil8',
+        },
+      });
+
+      // Uniform buffer for extra shader data
+      uniformBuffer = createBuffer(uniformData, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+      uniformBindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          {
+            binding: 0,
+            resource: {
+              buffer: uniformBuffer,
+            },
+          }
+        ],
+      });
+
+      // Start rendering
+      render();
+    }
+
+    /**
+     * Render function called one per frame.
+     */
+    async function render() {
+      // Get the current canvas backing texture
+      const colorTexture = context.getCurrentTexture();
+      const colorTextureView = colorTexture.createView();
+
+      // Command buffer
+      const commandEncoder = device.createCommandEncoder();
+      const passEncoder = commandEncoder.beginRenderPass({
+        colorAttachments: [
+          {
+            view: colorTextureView,
+            clearValue: { r: 0, g: 0, b: 0, a: 1 },
+            loadOp: 'clear',
+            storeOp: 'store',
+          },
+        ],
+        depthStencilAttachment: {
+          view: depthTextureView,
+          depthClearValue: 1,
+          depthLoadOp: 'clear',
+          depthStoreOp: 'store',
+          stencilClearValue: 0,
+          stencilLoadOp: 'clear',
+          stencilStoreOp: 'store',
+        },
+      });
+      passEncoder.setPipeline(pipeline);
+      passEncoder.setViewport(0, 0, canvas.width, canvas.height, 0, 1);
+      passEncoder.setScissorRect(0, 0, canvas.width, canvas.height);
+      passEncoder.setVertexBuffer(0, positionBuffer);
+      passEncoder.setVertexBuffer(1, colorBuffer);
+      passEncoder.setIndexBuffer(indexBuffer, 'uint16');
+      passEncoder.setBindGroup(0, uniformBindGroup);
+      passEncoder.drawIndexed(3);
+      passEncoder.end();
+
+      queue.submit([ commandEncoder.finish() ]);
+
+      // Request being called again
+      requestAnimationFrame(render);
+    }
+
+    window.addEventListener('load', () => {
+      // Just rethrow any async error
+      main().catch(err => { throw err; });
+    })
+  </script>
+</body>
+</html>
