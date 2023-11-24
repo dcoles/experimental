@@ -41,6 +41,7 @@
 
       const canvas = document.getElementById('canvas');
       const context = canvas.getContext('webgpu');
+      const queue = device.queue;
 
       // Helper for creating GPU buffers
       function createBuffer(arr, usage) {
@@ -150,9 +151,6 @@
 
       // Called once per frame
       async function render() {
-        // Render queue
-        const queue = device.queue;
-
         // Get the current canvas backing texture
         const colorTexture = context.getCurrentTexture();
         const colorTextureView = colorTexture.createView();
