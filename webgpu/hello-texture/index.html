@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hello Texture (WebGPU example)</title>
+  <link id="shader" rel="preload" type="text/wgsl" href="./shaders/shader.wgsl" as="fetch" crossorigin="anonymous">
+  <link id="bitmap" rel="preload" type="image/gif" href="./resources/f.gif" as="fetch" crossorigin="anonymous">
+</head>
+<body>
+  <h1>Hello Texture (WebGPU example)</h1>
+  <canvas id="canvas" width="512" height="512" style="border: solid 1px black;">Canvas not supported</canvas>
+  <p>'F' is used because it's easy to see the rendered bitmap's orientation</p>
+  <script type="module">
+    // Render quad: array<vec2<f32>>
+    const quad = new Float32Array([
+      // upper triangle
+      0.0, 1.0,
+      1.0, 0.0,
+      1.0, 1.0,
+
+      // lower triangle
+      0.0, 0.0,
+      1.0, 0.0,
+      0.0, 1.0,
+    ]);
+
+    // Uniform data
+    const uniformData = new Float32Array([
+      // viewProjection: mat4x4<f32> (fill viewport)
+      2.0, 0.0, 0.0, 0.0,
+      0.0, 2.0, 0.0, 0.0,
+      0.0, 0.0, 2.0, 0.0,
+      -1.0, -1.0, 0.0, 1.0,
+    ]);
+
+    // Draw indices for vertex ordering
+    const indices = new Uint16Array([0, 1, 2, 3, 4, 5]);
+
+    /**
+     * Main function
+     */
+    async function main() {
+      const adapter = await navigator.gpu?.requestAdapter();
+      const device = await adapter?.requestDevice();
+      if (!device) {
+        throw new Error('WebGPU not supported');
+      }
+
+      const canvas = document.getElementById('canvas');
+      const context = canvas.getContext('webgpu');
+      const queue = device.queue;
+
+      // Helper for creating GPU buffers
+      function createBuffer(arr, usage) {
+        const buffer = device.createBuffer({
+          size: (arr.byteLength + 3) & ~3,
+          usage,
+          mappedAtCreation: true,
+        });
+
+        const writeArray = arr instanceof Uint16Array ? new Uint16Array(buffer.getMappedRange()) : new Float32Array(buffer.getMappedRange());
+        writeArray.set(arr);
+        buffer.unmap();
+
+        return buffer;
+      }
+
+      // Helper for loading shaders
+      async function loadShader(url) {
+        const result = await fetch(url);
+        if (!result.ok) {
+          throw new Error(`Unable to fetch ${url}: HTTP ${result.status} ${result.statusText}`);
+        }
+
+        const shaderCode = await result.text();
+
+        return device.createShaderModule({ label: url, code: shaderCode });
+      }
+
+      // Load image bitmap
+      async function loadImageBitmap(url) {
+        const response = await fetch(url);
+        const blob = await response.blob();
+
+        return await createImageBitmap(blob, { colorSpaceConversion: 'none' });
+      }
+
+      const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
+      context.configure({
+        device: device,
+        format: presentationFormat,
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+        alphaMode: 'opaque',
+      });
+
+      const depthTexture = device.createTexture({
+        size: [canvas.width, canvas.height, 1],
+        dimension: '2d',
+        format: 'depth24plus-stencil8',
+        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+      });
+      const depthTextureView = depthTexture.createView();
+
+      const positionBuffer = createBuffer(quad, GPUBufferUsage.VERTEX);
+      const indexBuffer = createBuffer(indices, GPUBufferUsage.INDEX);
+      const uniformBuffer = createBuffer(uniformData, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+
+      const bitmapPreload = document.getElementById('bitmap');
+      const bitmap = await loadImageBitmap(bitmapPreload.href);
+      const imageTexture = device.createTexture({
+        format: 'rgba8unorm',
+        size: [bitmap.width, bitmap.height],
+        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+      });
+      queue.copyExternalImageToTexture({ source: bitmap, flipY: true }, { texture: imageTexture }, { width: bitmap.width, height: bitmap.height });
+
+      const shaderPreload = document.getElementById('shader');
+      const shaderModule = await loadShader(shaderPreload.href);
+
+      const pipeline = device.createRenderPipeline({
+        layout: "auto",
+        vertex: {
+          module: shaderModule,
+          entryPoint: 'vertShader',
+          buffers: [
+            // position
+            {
+              attributes: [
+                {
+                  shaderLocation: 0, // @location(0)
+                  offset: 0,
+                  format: 'float32x2',
+                }
+              ],
+              arrayStride: 4 * 2, // sizeof(float) * 2
+              stepMode: 'vertex',
+            },
+          ],
+        },
+        fragment: {
+          module: shaderModule,
+          entryPoint: 'fragShader',
+          targets: [
+            { format: presentationFormat },
+          ],
+        },
+        primitive: {
+          frontFace: 'cw',
+          cullMode: 'none',
+          topology: 'triangle-list',
+        },
+        depthStencil: {
+          depthWriteEnabled: true,
+          depthCompare: 'less',
+          format: 'depth24plus-stencil8',
+        },
+      });
+
+      const bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [
+          { binding: 0, resource: device.createSampler({ minFilter: 'linear' }) },
+          { binding: 1, resource: imageTexture.createView() },
+          { binding: 2, resource: { buffer: uniformBuffer }},
+        ],
+      });
+
+      // Called once per frame
+      async function render() {
+        // Get the current canvas backing texture
+        const colorTexture = context.getCurrentTexture();
+
+        // Command buffer
+        const commandEncoder = device.createCommandEncoder();
+        const passEncoder = commandEncoder.beginRenderPass({
+          colorAttachments: [
+            {
+              view: colorTexture.createView(),
+              clearValue: { r: 0, g: 0, b: 0, a: 1 },
+              loadOp: 'clear',
+              storeOp: 'store',
+            },
+          ],
+          depthStencilAttachment: {
+            view: depthTexture.createView(),
+            depthClearValue: 1,
+            depthLoadOp: 'clear',
+            depthStoreOp: 'store',
+            stencilClearValue: 0,
+            stencilLoadOp: 'clear',
+            stencilStoreOp: 'store',
+          },
+        });
+        passEncoder.setPipeline(pipeline);
+        passEncoder.setViewport(0, 0, canvas.width, canvas.height, 0, 1);
+        passEncoder.setScissorRect(0, 0, canvas.width, canvas.height);
+        passEncoder.setVertexBuffer(0, positionBuffer);
+        passEncoder.setIndexBuffer(indexBuffer, 'uint16');
+        passEncoder.setBindGroup(0, bindGroup);
+        passEncoder.drawIndexed(6);
+        passEncoder.end();
+
+        queue.submit([ commandEncoder.finish() ]);
+
+        // Request being called again
+        requestAnimationFrame(render);
+      }
+
+      // Start rendering
+      requestAnimationFrame(render);
+    }
+
+    window.addEventListener('load', () => {
+      // Just rethrow any async error
+      main().catch(err => { throw err; });
+    })
+  </script>
+</body>
+</html>
