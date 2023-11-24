@@ -65,6 +65,10 @@
         }
 
         const result = await fetch(preload.href);
+        if (!result.ok) {
+          throw new Error(`Unable to fetch ${preload.href}: HTTP ${result.status} ${result.statusText}`);
+        }
+
         const shaderCode = await result.text();
 
         return device.createShaderModule({ code: shaderCode });
