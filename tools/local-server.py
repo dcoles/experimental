@@ -20,10 +20,10 @@ class RequestHandler(SimpleHTTPRequestHandler):
     }
 
     def do_GET(self) -> None:
-        ret = super().do_GET()
-        print(self.guess_type('foo.wgsl'))
+        # Browser should never cache responses
+        self.headers['Cache-Control'] = 'no-store'
 
-        return ret
+        return super().do_GET()
 
 
 def parse_args() -> argparse.Namespace:
