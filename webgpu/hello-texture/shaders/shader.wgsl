@@ -1,6 +1,6 @@
 struct VSOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) texcoord: vec2<f32>,
+    @location(0) uv: vec2<f32>,
 };
 
 struct Uniforms {
@@ -12,16 +12,16 @@ struct Uniforms {
 @group(0) @binding(2) var<uniform> uni: Uniforms;
 
 @vertex
-fn vertShader(@location(0) in_pos: vec2<f32>) -> VSOutput {
+fn vertShader(@location(0) uv: vec2<f32>) -> VSOutput {
     var vs_out: VSOutput;
 
-    vs_out.position = uni.viewProjection * vec4<f32>(in_pos, 0.0, 1.0);
-    vs_out.texcoord = vec2<f32>(in_pos[0], in_pos[1]);
+    vs_out.position = uni.viewProjection * vec4<f32>(uv, 0.0, 1.0);
+    vs_out.uv = uv;
 
     return vs_out;
 }
 
 @fragment
 fn fragShader(input: VSOutput) -> @location(0) vec4<f32> {
-    return textureSample(imageTexture, imageSampler, input.texcoord);
+    return textureSample(imageTexture, imageSampler, input.uv);
 }
