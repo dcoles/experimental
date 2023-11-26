@@ -1,4 +1,4 @@
-struct VertOut {
+struct VertexOut {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
 };
@@ -7,23 +7,24 @@ struct Uniforms {
     viewProjection: mat4x4<f32>,
 };
 
-@group(0) @binding(0) var imageSampler: sampler;
-@group(0) @binding(1) var imageTexture: texture_2d<f32>;
+@group(0) @binding(0) var sourceSampler: sampler;
+@group(0) @binding(1) var sourceTexture: texture_2d<f32>;
 @group(0) @binding(2) var<uniform> uni: Uniforms;
 
 @vertex
-fn vertShader(@location(0) uv: vec2<f32>) -> VertOut {
-    var out: VertOut;
+fn vertShader(@location(0) uv: vec2<f32>) -> VertexOut {
+    var out: VertexOut;
 
     out.position = uni.viewProjection * vec4<f32>(uv, 0.0, 1.0);
-    out.uv = uv;
+    out.uv = vec2(uv.x, 1.0 - uv.y);
 
     return out;
 }
 
+// Applies horizontal chroma subsampling to source.
 @fragment
-fn fragShader(in1: VertOut) -> @location(0) vec4<f32> {
-    let texture_dim = textureDimensions(imageTexture);
+fn fragShader1(in1: VertexOut) -> @location(0) vec4<f32> {
+    let texture_dim = textureDimensions(sourceTexture);
     let uv = in1.uv;
 
     // Luma is sampled at full resolution
@@ -32,15 +33,30 @@ fn fragShader(in1: VertOut) -> @location(0) vec4<f32> {
     let n = f32(texture_dim.x) / 4.0;  // new chroma horizontal resolution
     let f = 1.0 / n / 4.0;  // sub-sampling step (UV coordinates)
 
-    let yuv0 = toYUV(textureSample(imageTexture, imageSampler, uv));
-    let yuv1 = toYUV(textureSample(imageTexture, imageSampler, uv + vec2(1*f, 0)));
-    let yuv2 = toYUV(textureSample(imageTexture, imageSampler, uv + vec2(2*f, 0)));
-    let yuv3 = toYUV(textureSample(imageTexture, imageSampler, uv + vec2(3*f, 0)));
+    let yuv0 = toYUV(textureSample(sourceTexture, sourceSampler, uv));
+    let yuv1 = toYUV(textureSample(sourceTexture, sourceSampler, uv + vec2(1*f, 0)));
+    let yuv2 = toYUV(textureSample(sourceTexture, sourceSampler, uv + vec2(2*f, 0)));
+    let yuv3 = toYUV(textureSample(sourceTexture, sourceSampler, uv + vec2(3*f, 0)));
 
     let luma_only = LUMA_MASK * yuv0;
     let chroma_only = CHROMA_MASK * ((yuv0 + yuv1 + yuv2 + yuv3) / 4);
 
     return toRGB(luma_only + chroma_only);
+}
+
+// Applies chromatic abberation to source.
+@fragment
+fn fragShader2(in1: VertexOut) -> @location(0) vec4<f32> {
+    let texture_dim = textureDimensions(sourceTexture);
+    let uv = in1.uv;
+
+    let f = 1.0 / f32(texture_dim.x);
+
+    let red = textureSample(sourceTexture, sourceSampler, uv);
+    let green = textureSample(sourceTexture, sourceSampler, uv + vec2(f, 0));
+    let blue = textureSample(sourceTexture, sourceSampler, uv + vec2(2*f, 0));
+
+    return vec4(red.r, green.g, blue.b, red.a);
 }
 
 // BT.601 RGB-to-YUV co-efficents (range: 0.0 to 1.0)
