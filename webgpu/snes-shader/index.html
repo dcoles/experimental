@@ -5,12 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>SNES shader</title>
   <link id="shader" rel="preload" type="text/wgsl" href="./shaders/shader.wgsl" as="fetch" crossorigin="anonymous">
-  <link id="bitmap" rel="preload" type="image/gif" href="./resources/dkc2.png" as="fetch" crossorigin="anonymous">
+  <style>
+    body {
+      background-color: hsl(0 0% 50%);
+      font-family: Verdana, Geneva, Tahoma, sans-serif;
+    }
+
+    canvas, img {
+      /* Make sure the browser doesn't do any of its own filtering */
+      image-rendering: pixelated;
+    }
+
+    figure canvas, figure img {
+      border: solid 1px black;
+    }
+  </style>
 </head>
-<body style="background-color: green">
+<body>
   <h1>SNES shader</h1>
-  <!-- The SNES had a 8/7 pixel aspect ratio on NTSC: https://gaming.stackexchange.com/a/318959 -->
-  <canvas id="canvas" width="878" height="672" style="border: solid 1px black;">Canvas not supported</canvas>
+  <figure>
+    <!--
+      The SNES default render resolution was 256x224 px, but the SNES had a 8/7 pixel aspect ratio
+      on NTSC (ref: https://gaming.stackexchange.com/a/318959). So the apparent size is 256x196 px.
+
+      878x672 = [(256 * (8/7)) * 3, 224 * 3] fit neatly into 720p
+    -->
+    <canvas id="canvas" width="878" height="672">Canvas not supported</canvas>
+    <figcaption>Filtered (scaled 3x)</figcaption>
+  </figure>
+  <figure>
+    <img id="source" height="672" src="resources/dkc2.png">
+    <figcaption>Original (scaled 3x)</figcaption>
+  </figure>
   <script type="module">
     // Render quad: array<vec2<f32>>
     const quad = new Float32Array([
