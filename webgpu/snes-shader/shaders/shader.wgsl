@@ -8,8 +8,9 @@ struct Uniforms {
 };
 
 @group(0) @binding(0) var sourceSampler: sampler;
-@group(0) @binding(1) var sourceTexture: texture_2d<f32>;
+@group(0) @binding(1) var intermediateTexture: texture_2d<f32>;
 @group(0) @binding(2) var<uniform> uni: Uniforms;
+@group(0) @binding(3) var sourceTexture: texture_external;
 
 @vertex
 fn vertShader(@location(0) uv: vec2<f32>) -> VertexOut {
@@ -25,21 +26,21 @@ fn vertShader(@location(0) uv: vec2<f32>) -> VertexOut {
 @fragment
 fn fragShader1(in1: VertexOut) -> @location(0) vec4<f32> {
     let texture_dim = textureDimensions(sourceTexture);
-    let uv = in1.uv;
 
     // Luma is sampled at full resolution
     // Chroma is downsampled/blurred by a factor of 4 (horizontal axis only)
+    let f = 1.0 / f32(texture_dim.x);
 
-    let n = f32(texture_dim.x) / 4.0;  // new chroma horizontal resolution
-    let f = 1.0 / n / 4.0;  // sub-sampling step (UV coordinates)
+    let yuvl = toYUV(textureSampleBaseClampToEdge(sourceTexture, sourceSampler, in1.uv));
 
-    let yuv0 = toYUV(textureSample(sourceTexture, sourceSampler, uv));
-    let yuv1 = toYUV(textureSample(sourceTexture, sourceSampler, uv + vec2(1*f, 0)));
-    let yuv2 = toYUV(textureSample(sourceTexture, sourceSampler, uv + vec2(2*f, 0)));
-    let yuv3 = toYUV(textureSample(sourceTexture, sourceSampler, uv + vec2(3*f, 0)));
+    // This is sampling across 8 pixels, which seems to many, but looks right.
+    var yuvc = vec4(0.0, 0.0, 0.0, 0.0);
+    for (var n: f32 = -4.0; n < 4.0; n += 1.0) {
+        yuvc += toYUV(textureSampleBaseClampToEdge(sourceTexture, sourceSampler, in1.uv + vec2(n * f, 0)));
+    }
 
-    let luma_only = LUMA_MASK * yuv0;
-    let chroma_only = CHROMA_MASK * ((yuv0 + yuv1 + yuv2 + yuv3) / 4);
+    let luma_only = LUMA_MASK * yuvl;
+    let chroma_only = CHROMA_MASK * (yuvc / 8.0);
 
     return toRGB(luma_only + chroma_only);
 }
@@ -47,14 +48,13 @@ fn fragShader1(in1: VertexOut) -> @location(0) vec4<f32> {
 // Applies chromatic abberation to source.
 @fragment
 fn fragShader2(in1: VertexOut) -> @location(0) vec4<f32> {
-    let texture_dim = textureDimensions(sourceTexture);
-    let uv = in1.uv;
+    let texture_dim = textureDimensions(intermediateTexture);
 
     let f = 1.0 / f32(texture_dim.x);
 
-    let red = textureSample(sourceTexture, sourceSampler, uv);
-    let green = textureSample(sourceTexture, sourceSampler, uv + vec2(f, 0));
-    let blue = textureSample(sourceTexture, sourceSampler, uv + vec2(2*f, 0));
+    let red = textureSampleBaseClampToEdge(intermediateTexture, sourceSampler, in1.uv);
+    let green = textureSampleBaseClampToEdge(intermediateTexture, sourceSampler, in1.uv + vec2(1.0 * f, 0));
+    let blue = textureSampleBaseClampToEdge(intermediateTexture, sourceSampler, in1.uv + vec2(2.0 * f, 0));
 
     return vec4(red.r, green.g, blue.b, red.a);
 }

@@ -7,37 +7,128 @@
   <link id="shader" rel="preload" type="text/wgsl" href="./shaders/shader.wgsl" as="fetch" crossorigin="anonymous">
   <style>
     body {
-      background-color: hsl(0 0% 50%);
+      background-color: #B9B6AC;
+      color: #374341;
       font-family: Verdana, Geneva, Tahoma, sans-serif;
+      font-style: italic;
     }
 
     canvas, img {
-      /* Make sure the browser doesn't do any of its own filtering */
+      /* Make sure the browser doesn't do any resampling */
       image-rendering: pixelated;
     }
 
-    figure canvas, figure img {
+    div.error {
+      position: fixed;
+      display: none;
+      left: 1em;
+      right: 1em;
+      border: solid 4px red;
+      background-color: black;
+      color: white;
+      padding: 1em
+    }
+
+    #displayArea canvas {
+      transition: filter 1.5s;
+      filter: none;
+    }
+
+    #displayArea.loading canvas {
+      filter: brightness(0);
+    }
+
+    #displayArea figure {
+      display: inline-block;
+    }
+
+    #displayArea figure > div {
+      height: 672px; /* 224 x 3 */
+      background-color: black;
       border: solid 1px black;
+      overflow: hidden;
+    }
+
+    #examples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    #examples img {
+      /* This is the standard resolution of the SNES */
+      width: 256px;
+      height: 224px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <h1>SNES shader</h1>
-  <figure>
-    <!--
-      The SNES default render resolution was 256x224 px, but the SNES had a 8/7 pixel aspect ratio
-      on NTSC (ref: https://gaming.stackexchange.com/a/318959). So the apparent size is 256x196 px.
+  <!--
+    NTSC has 240 scanlines, but the horizontal resolution is entirely dependent on how quickly
+    the signal can be modulated in the 52.148 microsecond active period of the scanline.
 
-      878x672 = [(256 * (8/7)) * 3, 224 * 3] fit neatly into 720p
-    -->
-    <canvas id="canvas" width="878" height="672">Canvas not supported</canvas>
-    <figcaption>Filtered (scaled 3x)</figcaption>
-  </figure>
-  <figure>
-    <img id="source" height="672" src="resources/dkc2.png">
-    <figcaption>Original (scaled 3x)</figcaption>
-  </figure>
+    The SNES S-PPU had a 5.37 MHz clock-rate, which meant that it could fit 280 pixels into
+    each horizontal scanline. The Super NES fills 256 of these with image data and leaves the
+    remainder that fall into the overscan area black.
+
+    Fitting a 280 x 240 image to 4:3 aspect ratio requires stretching the pixels horizontally
+    by a factor of 8/7.
+
+    While the SNES can almost fill all 240 scanlines, it's traditional to crop the image to
+    224 lines as an approximation of what the TV cuts off. This is where the 256 x 224 pixel
+    resolution of most SNES screenshots comes from.
+
+    Scaling up by 3x and stretching the pixels by 8/7 gives us an approximate image resolution
+    of 878 x 672 pixels [(256 * (8/7) * 3) x (224 * 3)].
+
+    Reference: https://gaming.stackexchange.com/a/318959
+  -->
+  <h1><span style="color: #00926A">S</span><span style="color: #014FA4">N</span><span style="color: #FFBC56">E</span><span style="color: #DE3A48">S</span> shader</h1>
+
+  <div id="not-supported" class="error">
+    <h2>Oh snap!</h2>
+    <p>Your browser does not seem to support the required <a href="https://caniuse.com/webgpu">WebGPU</a> or <a href="https://caniuse.com/webcodecs">WebCodecs</a> features. Please try updating to Chrome 119 (Desktop) or another recent browser release.</p>
+  </div>
+
+  <section id="displayArea">
+    <figure>
+      <div class="border">
+        <canvas id="filteredImage" width="878" height="672">Canvas not supported</canvas>
+      </div>
+      <figcaption>Filtered (scaled 3x)</figcaption>
+    </figure>
+    <figure>
+      <div class="border">
+        <canvas id="originalImage" width="768" height="672">Canvas not supported</canvas>
+      </div>
+      <figcaption>Original (scaled 3x)</figcaption>
+    </figure>
+  </section>
+
+  <h2>Examples</h2>
+  <section id="examples">
+    <a href="#dkc2-klobber-karnage"><img src="resources/dkc2-klobber-karnage.png"></a>
+    <a href="#chrono-trigger-fiendlord's-keep"><img src="resources/chrono-trigger-fiendlords-keep.png"></a>
+    <a href="#chrono-trigger-lucca's-great-invention"><img src="resources/chrono-trigger-luccas-great-invention.png"></a>
+    <a href="#street-fighter-2-hadouken"><img src="resources/street-fighter-2-hadouken.png"></a>
+    <a href="#starfox"><img src="resources/starfox.png"></a>
+    <a href="#starfox2"><img src="resources/starfox2.png"></a>
+    <a href="#super-mario-all-stars-world"><img src="resources/super-mario-all-stars-world.png"></a>
+    <a href="#tales-of-phantasia"><img src="resources/tales-of-phantasia.png"></a>
+    <a href="#breath-of-fire"><img src="resources/breath-of-fire.png"></a>
+    <a href="#the-lion-king"><img src="resources/the-lion-king.png"></a>
+    <a href="#dkc3-gameover"><img src="resources/dkc3-gameover.png"></a>
+    <a href="#yoshis-island"><img src="resources/yoshis-island.gif"></a>
+    <a href="#secret-of-mana-2"></a><img src="resources/secret-of-mana-2.png"></a>
+    <a href="#star-ocean"><img src="resources/star-ocean.png"></a>
+  </div>
+
   <script type="module">
+    const DEFAULT = '#klobber-karnage';
+    const RESOLUTION = [256, 224];
+    const FPS = 25;
+
     // Render quad: array<vec2<f32>>
     const quad = new Float32Array([
       // upper triangle
@@ -72,12 +163,25 @@
         requiredLimits: {},
         requiredFeatures: [],
       });
+
       if (!device) {
-        throw new Error('WebGPU not supported');
+        document.getElementById('not-supported').style.display = 'block';
+        console.log('WebGPU not supported');
+        return;
       }
 
-      const canvas = document.getElementById('canvas');
-      const context = canvas.getContext('webgpu');
+      if (location.hash.length < 2) {
+        // Load default image
+        location.hash = DEFAULT;
+      }
+
+      const displayArea = document.getElementById('displayArea');
+
+      const originalImage = document.getElementById('originalImage');
+      const originalContext = originalImage.getContext('2d');
+
+      const filteredImage = document.getElementById('filteredImage')
+      const context = filteredImage.getContext('webgpu');
       const queue = device.queue;
 
       // Helper for creating GPU buffers
@@ -107,12 +211,23 @@
         return device.createShaderModule({ label: url, code: shaderCode });
       }
 
-      // Load image bitmap
-      async function loadImageBitmap(url) {
-        const response = await fetch(url);
-        const blob = await response.blob();
+      // Fetch an image from a URL and wrap in an ImageDecoder.
+      // This allows access to multiple frames of an animated GIF (Image only gives you frame 0).
+      // Unfortunately this requires Chrome Desktop 119 or newer.
+      async function fetchDecodeableImage(url) {
+        const result = await fetch(url);
+        const content_type = result.headers.get('Content-Type');
 
-        return await createImageBitmap(blob, { colorSpaceConversion: 'none' });
+        const decoder = new ImageDecoder({
+          type: content_type,
+          data: result.body,
+          colorSpaceConversion: 'none',
+          preferAnimation: true,
+        });
+
+        await decoder.completed;
+
+        return decoder;
       }
 
       const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
@@ -128,20 +243,10 @@
       const indexBuffer = createBuffer(indices, GPUBufferUsage.INDEX);
       const uniformBuffer = createBuffer(uniformData, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
 
-      // Source image texture
-      const source = document.getElementById('source');
-      const bitmap = await loadImageBitmap(source.src);
-      const imageTexture = device.createTexture({
-        format: 'rgba8unorm',
-        size: [bitmap.width, bitmap.height],
-        usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-      });
-      queue.copyExternalImageToTexture({ source: bitmap }, { texture: imageTexture }, { width: bitmap.width, height: bitmap.height });
-
       // Intermediate texture for filtering
       const intermediateTexture = device.createTexture({
         format: 'rgba8unorm',
-        size: [bitmap.width, bitmap.height],
+        size: RESOLUTION,
         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.RENDER_ATTACHMENT,
       });
 
@@ -181,15 +286,6 @@
           cullMode: 'none',
           topology: 'triangle-list',
         },
-      });
-
-      const bindGroup1 = device.createBindGroup({
-        layout: pipeline1.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: device.createSampler() },
-          { binding: 1, resource: imageTexture.createView() },
-          { binding: 2, resource: { buffer: uniformBuffer }},
-        ],
       });
 
       // This pipeline applies chromatic abberation
@@ -236,14 +332,56 @@
         ],
       });
 
+      let currentURL = null;
+      let imageDecoder = null;
+
       // Called once per frame
-      async function render() {
-        // Get the current canvas backing texture
-        const colorTexture = context.getCurrentTexture();
+      async function render(timestamp) {
+        const element = document.querySelector(`a[href="${location.hash}"] img`);
+
+        if (element && currentURL != element.src) {
+          displayArea.classList.add('loading');
+
+          if (imageDecoder) {
+            imageDecoder.close();
+          }
+
+          // Only change the decoder in the render function to avoid race conditions
+          imageDecoder = await fetchDecodeableImage(element.src);
+          currentURL = element.src;
+        }
+
+        if (!imageDecoder || !imageDecoder.complete || !imageDecoder.tracks.selectedTrack) {
+          // Decoder isn't ready yet, so reschedule
+          requestAnimationFrame(render);
+          return;
+        }
+
+        displayArea.classList.remove('loading');
+
+        // What frame should we display?
+        const n = Math.floor(FPS * timestamp / 1000.0) % imageDecoder.tracks.selectedTrack.frameCount;
+        const frame = await imageDecoder.decode({ frameIndex: n });
+
+        // Draw the source frame to a Canvas 2D
+        originalContext.imageSmoothingEnabled = false;
+        originalContext.drawImage(frame.image, 0, 0, 768, 672);
+
+        const externalTexture = device.importExternalTexture({ source: frame.image });
+
+        const bindGroup1 = device.createBindGroup({
+          layout: pipeline1.getBindGroupLayout(0),
+          entries: [
+            { binding: 0, resource: device.createSampler() },
+            { binding: 2, resource: { buffer: uniformBuffer }},
+            { binding: 3, resource: externalTexture },
+          ],
+        });
 
         // Command buffer
         const commandEncoder = device.createCommandEncoder();
 
+        // This pass performs chroma subsampling
         const pass1 = commandEncoder.beginRenderPass({
           colorAttachments: [
             {
@@ -261,10 +399,11 @@
         pass1.drawIndexed(6);
         pass1.end();
 
+        // This pass applies chromatic abberation and renders to the canvas
         const pass2 = commandEncoder.beginRenderPass({
           colorAttachments: [
             {
-              view: colorTexture.createView(),
+              view: context.getCurrentTexture().createView(),
               clearValue: { r: 0, g: 0, b: 0, a: 1 },
               loadOp: 'clear',
               storeOp: 'store',
@@ -280,7 +419,6 @@
 
         queue.submit([ commandEncoder.finish() ]);
 
-        // Request being called again
         requestAnimationFrame(render);
       }
 
