@@ -19,5 +19,5 @@ GRUB_CMDLINE_LINUX="${GRUB_CMDLINE_LINUX} iommu.passthrough=1"
 Add the following to `/etc/udev/rules.d/fsl_mc_bus.rules`:
 
 ```
-ACTION=="add", SUBSYSTEM=="fsl-mc", ENV{DEVTYPE}=="fsl_mc_bus_dpmac", KERNEL=="dpmac.9", RUN+="/usr/bin/flock /usr/bin/ls-addni -c '(PATH=/usr/bin:/usr/local/bin /usr/local/bin/ls-addni %k)'"
+ACTION=="add", SUBSYSTEM=="fsl-mc", ENV{DEVTYPE}=="fsl_mc_bus_dpmac", KERNEL=="dpmac.9", RUN+="/usr/bin/flock /usr/bin/ls-addni -c '/usr/bin/ls-addni %k'"
 ```
