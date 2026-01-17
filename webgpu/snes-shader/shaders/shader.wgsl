@@ -33,7 +33,7 @@ fn fragShader1(in1: VertexOut) -> @location(0) vec4<f32> {
 
     let yuvl = toYUV(textureSampleBaseClampToEdge(sourceTexture, sourceSampler, in1.uv));
 
-    // This is sampling across 8 pixels, which seems to many, but looks right.
+    // This is sampling across 8 pixels, which seems too many, but looks right.
     var yuvc = vec4(0.0, 0.0, 0.0, 0.0);
     for (var n: f32 = -4.0; n < 4.0; n += 1.0) {
         yuvc += toYUV(textureSampleBaseClampToEdge(sourceTexture, sourceSampler, in1.uv + vec2(n * f, 0)));
@@ -60,36 +60,39 @@ fn fragShader2(in1: VertexOut) -> @location(0) vec4<f32> {
 }
 
 // BT.601 RGB-to-YUV co-efficents (range: 0.0 to 1.0)
-// NOTE: WGSL expects *column*-major storage, so we have to transpose
-const YUV: mat4x4<f32> = transpose(mat4x4(
-     0.299,  0.587,  0.114, 0, // Y
-    -0.169, -0.331,  0.500, 0, // U (Cb)
-     0.500, -0.419, -0.081, 0, // V (Cr)
-     0.000,  0.000,  0.000, 1  // A
-));
+// NOTE: WGSL expects *column*-major storage
 
-const YUV_: mat4x4<f32> = transpose(mat4x4(
-     1.000,  0.000,  1.000, 0, // R
-     1.000, -0.344, -0.714, 0, // G
-     1.000,  1.772,  0.000, 0, // B
-     0.000,  0.000,  0.000, 1  // A
-));
+const YUV: mat4x4<f32> = mat4x4(
+    // Y     U (Cb)  V (Cr)  A
+     0.299, -0.169,  0.500,  0.000,
+     0.587, -0.331, -0.419,  0.000,
+     0.114,  0.500, -0.081,  0.000,
+     0,      0,      0,      1,
+);
+
+const YUV_: mat4x4<f32> = mat4x4(
+    // R     G       B       A
+     1.000,  1.000,  1.000,  0.000,
+     0.000, -0.344,  1.772,  0.000,
+     1.000, -0.714,  0.000,  0.000,
+     0,      0,      0,      1
+);
 
 // Mask for just luma values
-const LUMA_MASK: mat4x4<f32> = transpose(mat4x4(
+const LUMA_MASK: mat4x4<f32> = mat4x4(
     1, 0, 0, 0,
     0, 0, 0, 0,
     0, 0, 0, 0,
-    0, 0, 0, 0,
-));
+    0, 0, 0, 1,
+);
 
 // Mask for just chroma (UV) values
-const CHROMA_MASK: mat4x4<f32> = transpose(mat4x4(
+const CHROMA_MASK: mat4x4<f32> = mat4x4(
     0, 0, 0, 0,
     0, 1, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 0,
-));
+);
 
 // RGB(A) (range: 0.0-1.0) to YUV(A) (range: 0.0-1.0)
 // This means that 0.5 is the center of U/V values
